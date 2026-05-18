@@ -46,9 +46,9 @@ from main_costs_to_excel import transform_cleaned_jsons_to_xlsx
 # Override with absolute paths if needed, e.g. on Colab/Drive:
 #   HARDCODED_INPUT_FOLDER = Path("/content/Asics_SevenSenders/input")
 # ---------------------------------------------------------------------------
-HARDCODED_INPUT_FOLDER = PIPELINE_ROOT / "input"
-HARDCODED_PROCESSING_FOLDER = PIPELINE_ROOT / "processing"
-HARDCODED_OUTPUT_FOLDER = PIPELINE_ROOT / "output"
+HARDCODED_INPUT_FOLDER = Path("/content/drive/Shareddrives/FA Ops Europe: Rate Maintenance Team /Documents/AI Adoption RMT/RMT Asics/RMT_SevenSenders/input")
+HARDCODED_PROCESSING_FOLDER = Path("/content/drive/Shareddrives/FA Ops Europe: Rate Maintenance Team /Documents/AI Adoption RMT/RMT Asics/RMT_SevenSenders/processing")
+HARDCODED_OUTPUT_FOLDER = Path("/content/drive/Shareddrives/FA Ops Europe: Rate Maintenance Team /Documents/AI Adoption RMT/RMT Asics/RMT_SevenSenders/output")
 
 
 def list_input_json_files() -> list[Path]:
