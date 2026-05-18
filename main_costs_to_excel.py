@@ -12,6 +12,18 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from accessorial_costs_to_excel import (
+    AccessorialReport,
+    RateCardExtraColumn,
+    build_rate_card_extra_columns,
+    merge_accessorial_reports,
+    partner_matches,
+    process_accessorial_data,
+    write_accessorial_sheet,
+    write_report_files,
+    write_simple_cost_block_headers,
+)
+
 PROCESSING_DIR = Path(__file__).resolve().parent / "processing"
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
 SHEET_TITLE = "Rate Card"
@@ -1761,6 +1773,7 @@ def write_rate_card_sheet(
     lanes: list[LaneRow],
     sheet_title: str = SHEET_TITLE,
     floater_columns: list[FloaterColumn] | None = None,
+    extra_columns: list[RateCardExtraColumn] | None = None,
 ) -> None:
     ws = workbook.active
     ws.title = sheet_title[:31]
@@ -1774,10 +1787,11 @@ def write_rate_card_sheet(
 
     transport_lanes, parsed_floaters = split_transport_and_floater(lanes)
     floaters = floater_columns if floater_columns is not None else parsed_floaters
+    extras = extra_columns or []
 
     num_fixed = len(FIXED_COLS)
     column_groups = group_lanes_for_columns(transport_lanes)
-    header_row_count = 6 if floaters else 5
+    header_row_count = 6 if (floaters or extras) else 5
     data_start_row = header_row_count
 
     for col_idx, name in enumerate(FIXED_COLS, 1):
@@ -1810,6 +1824,20 @@ def write_rate_card_sheet(
             ws, start_col, floater, weights, header_fill, header_font, header_alignment
         )
         floater_blocks.append((start_col, weights, floater))
+        col = end_col + 1
+
+    extra_blocks: list[tuple[int, RateCardExtraColumn]] = []
+    for extra in extras:
+        start_col = col
+        end_col = write_simple_cost_block_headers(
+            ws,
+            start_col,
+            extra,
+            header_fill,
+            header_font,
+            header_alignment,
+        )
+        extra_blocks.append((start_col, extra))
         col = end_col + 1
 
     for row_idx in range(2, header_row_count):
@@ -1868,9 +1896,17 @@ def write_rate_card_sheet(
                 if weight_label in floater.forward_filled:
                     cell.fill = forward_fill_highlight
 
+        for extra_start, extra in extra_blocks:
+            if partner_matches(lane.carrier_partner, extra.partner_filter):
+                ws.cell(row=data_row, column=extra_start, value=extra.currency)
+                ws.cell(row=data_row, column=extra_start + 1, value=extra.value)
+            else:
+                ws.cell(row=data_row, column=extra_start, value="")
+                ws.cell(row=data_row, column=extra_start + 1, value="")
+
         data_row += 1
 
-    total_cols = col - 1 if transport_rows or floaters else num_fixed
+    total_cols = col - 1 if transport_rows or floaters or extras else num_fixed
     last_row = data_row - 1
     for c in range(1, total_cols + 1):
         letter = get_column_letter(c)
@@ -1889,23 +1925,76 @@ def write_rate_card_sheet(
         )
 
 
-def transform_json_to_xlsx(data: dict, out_path: Path) -> Path:
-    fields = data.get("fields") or {}
-    main_costs = fields.get("MainCosts") or data.get("MainCosts") or []
-    price_validity = fields.get("PriceValidity") or data.get("PriceValidity") or ""
+def load_fields_from_cleaned(data: dict) -> dict:
+    return data.get("fields") or {}
 
-    carrier_label = normalize_carrier_label(
-        fields.get("Carrier") or data.get("Carrier") or "Seven Senders"
-    )
-    lanes = parse_main_costs(main_costs, price_validity, carrier_label)
-    transport_lanes, floater_columns = split_transport_and_floater(lanes)
+
+def build_workbook_from_fields_list(
+    fields_list: list[dict],
+) -> tuple[Workbook, AccessorialReport]:
+    transport_lanes: list[LaneRow] = []
+    floater_columns: list[FloaterColumn] = []
+    extra_by_title: dict[str, RateCardExtraColumn] = {}
+    accessorial_reports: list[AccessorialReport] = []
+
+    for fields in fields_list:
+        main_costs = fields.get("MainCosts") or []
+        price_validity = fields.get("PriceValidity") or ""
+        carrier_label = normalize_carrier_label(
+            fields.get("Carrier") or "Seven Senders"
+        )
+        lanes = parse_main_costs(main_costs, price_validity, carrier_label)
+        transport, floaters = split_transport_and_floater(lanes)
+        transport_lanes.extend(transport)
+        floater_columns.extend(floaters)
+
+        for col in build_rate_card_extra_columns(fields)[0]:
+            extra_by_title.setdefault(col.title, col)
+        accessorial_reports.append(process_accessorial_data(fields))
+
     if not transport_lanes and not floater_columns:
         raise ValueError("No MainCosts lanes could be built from the input JSON.")
 
+    accessorial_report = merge_accessorial_reports(accessorial_reports)
     wb = Workbook()
-    write_rate_card_sheet(wb, transport_lanes, floater_columns=floater_columns)
+    write_rate_card_sheet(
+        wb,
+        transport_lanes,
+        floater_columns=floater_columns,
+        extra_columns=list(extra_by_title.values()),
+    )
+    write_accessorial_sheet(wb, accessorial_report)
+    return wb, accessorial_report
+
+
+def transform_json_to_xlsx(data: dict, out_path: Path) -> Path:
+    fields = load_fields_from_cleaned(data)
+    wb, accessorial_report = build_workbook_from_fields_list([fields])
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)
+    write_report_files(accessorial_report, out_path)
+    return out_path
+
+
+def transform_cleaned_jsons_to_xlsx(
+    cleaned_paths: list[Path], out_path: Path
+) -> Path:
+    if not cleaned_paths:
+        raise ValueError("No cleaned JSON files provided.")
+
+    fields_list: list[dict] = []
+    for path in cleaned_paths:
+        with path.open(encoding="utf-8") as f:
+            data = json.load(f)
+        fields = load_fields_from_cleaned(data)
+        if not fields:
+            raise ValueError(f"No fields found in cleaned JSON: {path}")
+        fields_list.append(fields)
+
+    wb, accessorial_report = build_workbook_from_fields_list(fields_list)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(out_path)
+    write_report_files(accessorial_report, out_path)
     return out_path
 
 
