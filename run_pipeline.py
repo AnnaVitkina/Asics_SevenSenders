@@ -6,24 +6,49 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+
+def _find_project_root() -> Path:
+    """Locate the folder containing json_clean.py (works with python and exec())."""
+    try:
+        script_dir = Path(__file__).resolve().parent
+        if (script_dir / "json_clean.py").is_file():
+            return script_dir
+    except NameError:
+        pass
+
+    for candidate in (
+        Path.cwd(),
+        Path("/content/Asics_SevenSenders"),
+        *Path.cwd().parents,
+    ):
+        if (candidate / "json_clean.py").is_file():
+            return candidate.resolve()
+
+    raise FileNotFoundError(
+        "Could not find project root (json_clean.py). "
+        "Run from the project folder or set PIPELINE_ROOT, e.g.\n"
+        "  import os; os.chdir('/content/Asics_SevenSenders')"
+    )
+
+
+_root_override = globals().get("PIPELINE_ROOT")
+PIPELINE_ROOT = (
+    Path(_root_override).resolve() if _root_override else _find_project_root()
+)
+if str(PIPELINE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PIPELINE_ROOT))
+
 from json_clean import process_file as clean_json_file
 from main_costs_to_excel import transform_cleaned_jsons_to_xlsx
 
 # ---------------------------------------------------------------------------
-# Edit these paths for your environment (examples):
-#   Windows:  Path(r"C:\Users\avitkin\Desktop\ups\input")
-#   Colab:    Path("/content/drive/Shareddrives/FA Ops Europe: Rate Maintenance "
-#                 "Team /Documents/AI Adoption RMT/RMT/input json")
+# Folder paths (defaults: input / processing / output under PIPELINE_ROOT).
+# Override with absolute paths if needed, e.g. on Colab/Drive:
+#   HARDCODED_INPUT_FOLDER = Path("/content/Asics_SevenSenders/input")
 # ---------------------------------------------------------------------------
-HARDCODED_INPUT_FOLDER = Path(
-   "/content/drive/Shareddrives/FA Ops Europe: Rate Maintenance Team /Documents/AI Adoption RMT/RMT Asics/RMT_SevenSenders/input"
-)
-HARDCODED_PROCESSING_FOLDER = Path(
-   "/content/drive/Shareddrives/FA Ops Europe: Rate Maintenance Team /Documents/AI Adoption RMT/RMT Asics/RMT_SevenSenders/processing"
-)
-HARDCODED_OUTPUT_FOLDER = Path(
-     "/content/drive/Shareddrives/FA Ops Europe: Rate Maintenance Team /Documents/AI Adoption RMT/RMT Asics/RMT_SevenSenders/output"
-)
+HARDCODED_INPUT_FOLDER = PIPELINE_ROOT / "input"
+HARDCODED_PROCESSING_FOLDER = PIPELINE_ROOT / "processing"
+HARDCODED_OUTPUT_FOLDER = PIPELINE_ROOT / "output"
 
 
 def list_input_json_files() -> list[Path]:
@@ -35,7 +60,8 @@ def list_input_json_files() -> list[Path]:
 
 
 def prompt_file_selection(files: list[Path]) -> list[Path]:
-    print(f"\nInput folder: {HARDCODED_INPUT_FOLDER}")
+    print(f"\nProject root: {PIPELINE_ROOT}")
+    print(f"Input folder: {HARDCODED_INPUT_FOLDER}")
     print(f"Processing folder: {HARDCODED_PROCESSING_FOLDER}")
     print(f"Output folder: {HARDCODED_OUTPUT_FOLDER}\n")
 
