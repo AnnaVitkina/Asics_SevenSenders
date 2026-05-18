@@ -108,7 +108,18 @@ def process_file(input_path: Path, output_dir: Path) -> Path:
     with input_path.open(encoding="utf-8") as f:
         data = json.load(f)
 
-    cleaned = clean_analyze_result(data, input_path.name)
+    if data.get("fields") and not data.get("analyzeResult"):
+        cleaned = {
+            "source": input_path.name,
+            "status": data.get("status"),
+            "fields": data["fields"],
+        }
+        if data.get("docType"):
+            cleaned["docType"] = data["docType"]
+        if data.get("documents"):
+            cleaned["documents"] = data["documents"]
+    else:
+        cleaned = clean_analyze_result(data, input_path.name)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / input_path.name
     with output_path.open("w", encoding="utf-8") as f:
