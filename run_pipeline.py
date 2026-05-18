@@ -165,5 +165,17 @@ def main() -> int:
         return 1
 
 
+def _in_notebook() -> bool:
+    try:
+        from IPython import get_ipython
+
+        shell = get_ipython().__class__.__name__
+        return shell in ("ZMQInteractiveShell", "TerminalInteractiveShell")
+    except (ImportError, AttributeError, NameError):
+        return False
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    _exit_code = main()
+    if not _in_notebook():
+        raise SystemExit(_exit_code)
