@@ -16,13 +16,13 @@ from main_costs_to_excel import transform_cleaned_jsons_to_xlsx
 #                 "Team /Documents/AI Adoption RMT/RMT/input json")
 # ---------------------------------------------------------------------------
 HARDCODED_INPUT_FOLDER = Path(
-    r"C:\Users\avitkin\.cursor\projects_folders\RMT\SevenSenders\input"
+   "/content/drive/Shareddrives/FA Ops Europe: Rate Maintenance Team /Documents/AI Adoption RMT/RMT Asics/RMT_SevenSenders/input"
 )
 HARDCODED_PROCESSING_FOLDER = Path(
-    r"C:\Users\avitkin\.cursor\projects_folders\RMT\SevenSenders\processing"
+   "/content/drive/Shareddrives/FA Ops Europe: Rate Maintenance Team /Documents/AI Adoption RMT/RMT Asics/RMT_SevenSenders/processing"
 )
 HARDCODED_OUTPUT_FOLDER = Path(
-    r"C:\Users\avitkin\.cursor\projects_folders\RMT\SevenSenders\output"
+     "/content/drive/Shareddrives/FA Ops Europe: Rate Maintenance Team /Documents/AI Adoption RMT/RMT Asics/RMT_SevenSenders/output"
 )
 
 
